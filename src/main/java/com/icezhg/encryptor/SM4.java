@@ -237,8 +237,8 @@ public final class SM4 {
     private byte[] array_copy_be(byte[] input, Function<byte[], byte[]> func) {
         byte[] out = new byte[input.length];
         for (int i = 0; i < input.length; i += 16) {
-            int pos = i << 4;
-            byte[] bytes = func.apply(Arrays.copyOfRange(input, pos, (i + 1) << 4));
+            int pos = i * 16;
+            byte[] bytes = func.apply(Arrays.copyOfRange(input, pos, pos + 16));
             System.arraycopy(bytes, pos, out, pos, 16);
         }
         return out;
