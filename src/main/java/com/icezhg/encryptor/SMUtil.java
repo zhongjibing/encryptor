@@ -1,5 +1,6 @@
 package com.icezhg.encryptor;
 
+import org.apache.commons.codec.binary.Base64;
 import org.bouncycastle.asn1.ASN1EncodableVector;
 import org.bouncycastle.asn1.ASN1Integer;
 import org.bouncycastle.asn1.ASN1Sequence;
@@ -45,6 +46,8 @@ public class SMUtil {
 
     private static final String CIPHER_PARAM = "SM4";
     private static final String MODE_PARAM = "SM4/ECB/PKCS7Padding";
+    private static final String EMPTY_STRING = "";
+    private static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
 
 
     static {
@@ -62,33 +65,38 @@ public class SMUtil {
         String stringY = publicKeyHex.substring(stringX.length());
         BigInteger x = new BigInteger(stringX, 16);
         BigInteger y = new BigInteger(stringY, 16);
-        ECPublicKeySpec ecPublicKeySpec = new ECPublicKeySpec(x9ECParameters.getCurve().createPoint(x, y), ecParameterSpec);
+        ECPublicKeySpec ecPublicKeySpec = new ECPublicKeySpec(x9ECParameters.getCurve().createPoint(x, y),
+                ecParameterSpec);
         return new BCECPublicKey("EC", ecPublicKeySpec, BouncyCastleProvider.CONFIGURATION);
     }
 
-    private static byte[] innerSM2Encrypt(BCECPublicKey publicKey, String data, int modeType)
+    private static byte[] innerSM2Encrypt(BCECPublicKey publicKey, byte[] plain, int modeType)
             throws InvalidCipherTextException {
         SM2Engine.Mode mode = SM2Engine.Mode.C1C3C2;
         if (modeType != 1) {
             mode = SM2Engine.Mode.C1C2C3;
         }
         ECParameterSpec ecParameterSpec = publicKey.getParameters();
-        ECDomainParameters ecDomainParameters = new ECDomainParameters(ecParameterSpec.getCurve(), ecParameterSpec.getG(), ecParameterSpec.getN());
+        ECDomainParameters ecDomainParameters = new ECDomainParameters(ecParameterSpec.getCurve(),
+                ecParameterSpec.getG(), ecParameterSpec.getN());
         ECPublicKeyParameters ecPublicKeyParameters = new ECPublicKeyParameters(publicKey.getQ(), ecDomainParameters);
         SM2Engine sm2Engine = new SM2Engine(mode);
         sm2Engine.init(true, new ParametersWithRandom(ecPublicKeyParameters, new SecureRandom()));
-        byte[] in = data.getBytes(StandardCharsets.UTF_8);
-        return sm2Engine.processBlock(in, 0, in.length);
+        return sm2Engine.processBlock(plain, 0, plain.length);
     }
 
 
-    public static byte[] sm2Encrypt(String hexPublicKey, String plainText) {
+    public static byte[] sm2Encrypt(String hexPublicKey, byte[] plain) {
         BCECPublicKey publicKey = getECPublicKeyByPublicKeyHex(hexPublicKey);
         try {
-            return innerSM2Encrypt(publicKey, plainText, 1);
+            return innerSM2Encrypt(publicKey, plain, 1);
         } catch (Exception e) {
-            return new byte[0];
+            return EMPTY_BYTE_ARRAY;
         }
+    }
+
+    public static String sm2Encrypt(String hexPublicKey, String plainText) {
+        return Base64.encodeBase64String(sm2Encrypt(hexPublicKey, plainText.getBytes(StandardCharsets.UTF_8)));
     }
 
     private static BCECPrivateKey getBCECPrivateKeyByPrivateKeyHex(String privateKeyHex) {
@@ -104,21 +112,26 @@ public class SMUtil {
             mode = SM2Engine.Mode.C1C2C3;
         }
         ECParameterSpec ecParameterSpec = privateKey.getParameters();
-        ECDomainParameters ecDomainParameters = new ECDomainParameters(ecParameterSpec.getCurve(), ecParameterSpec.getG(), ecParameterSpec.getN());
-        ECPrivateKeyParameters ecPrivateKeyParameters = new ECPrivateKeyParameters(privateKey.getD(), ecDomainParameters);
+        ECDomainParameters ecDomainParameters = new ECDomainParameters(ecParameterSpec.getCurve(),
+                ecParameterSpec.getG(), ecParameterSpec.getN());
+        ECPrivateKeyParameters ecPrivateKeyParameters = new ECPrivateKeyParameters(privateKey.getD(),
+                ecDomainParameters);
         SM2Engine sm2Engine = new SM2Engine(mode);
         sm2Engine.init(false, ecPrivateKeyParameters);
         return sm2Engine.processBlock(cipherData, 0, cipherData.length);
     }
 
-    public static String sm2Decrypt(String hexPrivateKey, byte[] encBytes) {
+    public static byte[] sm2Decrypt(String hexPrivateKey, byte[] cipher) {
+        BCECPrivateKey privateKey = getBCECPrivateKeyByPrivateKeyHex(hexPrivateKey);
         try {
-            BCECPrivateKey privateKey = getBCECPrivateKeyByPrivateKeyHex(hexPrivateKey);
-            byte[] decResult = innerSM2Decrypt(privateKey, encBytes, 1);
-            return new String(decResult);
+            return innerSM2Decrypt(privateKey, cipher, 1);
         } catch (Exception e) {
-            return "";
+            return EMPTY_BYTE_ARRAY;
         }
+    }
+
+    public static String sm2Decrypt(String hexPrivateKey, String encBase64) {
+        return new String(sm2Decrypt(hexPrivateKey, Base64.decodeBase64(encBase64)), StandardCharsets.UTF_8);
     }
 
     private static byte[] signature(byte[] src, byte[] id, BCECPrivateKey sm2Key) throws GeneralSecurityException {
@@ -131,15 +144,15 @@ public class SMUtil {
 
     private static byte[] ans1ToRS(byte[] rsDer) {
         ASN1Sequence seq = ASN1Sequence.getInstance(rsDer);
-        byte[] r = bigIntToFixexLengthBytes(ASN1Integer.getInstance(seq.getObjectAt(0)).getValue());
-        byte[] s = bigIntToFixexLengthBytes(ASN1Integer.getInstance(seq.getObjectAt(1)).getValue());
+        byte[] r = bigIntToFixedLengthBytes(ASN1Integer.getInstance(seq.getObjectAt(0)).getValue());
+        byte[] s = bigIntToFixedLengthBytes(ASN1Integer.getInstance(seq.getObjectAt(1)).getValue());
         byte[] result = new byte[RS_LEN * 2];
         System.arraycopy(r, 0, result, 0, r.length);
         System.arraycopy(s, 0, result, RS_LEN, s.length);
         return result;
     }
 
-    private static byte[] bigIntToFixexLengthBytes(BigInteger rOrS) {
+    private static byte[] bigIntToFixedLengthBytes(BigInteger rOrS) {
         // for sm2p256v1, n is 00fffffffeffffffffffffffffffffffff7203df6b21c6052b53bbf40939d54123,
         // r and s are the result of mod n, so they should be less than n and have length<=32
         byte[] rs = rOrS.toByteArray();
@@ -158,12 +171,14 @@ public class SMUtil {
     /**
      * SM2加签
      */
-    public static byte[] sm2Sign(String hexPrivateKey, String sortedString, String id) {
+    public static String sm2Sign(String hexPrivateKey, String sortedString, String id) {
         try {
             BCECPrivateKey privateKey = getBCECPrivateKeyByPrivateKeyHex(hexPrivateKey);
-            return signature(sortedString.getBytes(), id.getBytes(), privateKey);
+            byte[] value = sortedString.getBytes(StandardCharsets.UTF_8);
+            byte[] signature = signature(value, id.getBytes(StandardCharsets.UTF_8), privateKey);
+            return Base64.encodeBase64String(signature);
         } catch (Exception e) {
-            return new byte[0];
+            return EMPTY_STRING;
         }
     }
 
@@ -201,10 +216,18 @@ public class SMUtil {
     public static boolean sm2SignValidate(String hexPublicKey, byte[] value, String sortedString, String id) {
         try {
             BCECPublicKey publicKey = getECPublicKeyByPublicKeyHex(hexPublicKey);
-            return verifySignature(sortedString.getBytes(), value, id.getBytes(), publicKey);
+            return verifySignature(sortedString.getBytes(StandardCharsets.UTF_8), value,
+                    id.getBytes(StandardCharsets.UTF_8), publicKey);
         } catch (Exception e) {
             return false;
         }
+    }
+
+    /**
+     * SM2验签入口
+     */
+    public static boolean sm2SignValidate(String hexPublicKey, String sign, String sortedString, String id) {
+        return sm2SignValidate(hexPublicKey, Base64.decodeBase64(sign), sortedString, id);
     }
 
     private static Key generateSm4Key(byte[] key) {
@@ -228,22 +251,26 @@ public class SMUtil {
     /**
      * SM4加密入口
      */
-    public static byte[] sm4Encrypt(String sm4Key, String plainText) {
+    public static String sm4Encrypt(String sm4Key, String plainText) {
         try {
-            return innerSM4Encrypt(plainText.getBytes(), sm4Key.getBytes());
+            byte[] key = sm4Key.getBytes(StandardCharsets.UTF_8);
+            byte[] plain = plainText.getBytes(StandardCharsets.UTF_8);
+            return Base64.encodeBase64String(innerSM4Encrypt(plain, key));
         } catch (Exception e) {
-            return new byte[0];
+            return EMPTY_STRING;
         }
     }
 
     /**
      * SM4解密入口
      */
-    public static String sm4Decrypt(String sm4Key, byte[] encBytes) {
+    public static String sm4Decrypt(String sm4Key, String encBase64) {
         try {
-            return new String(innerSM4Decrypt(sm4Key.getBytes(), encBytes));
+            byte[] key = sm4Key.getBytes(StandardCharsets.UTF_8);
+            byte[] cipher = Base64.decodeBase64(encBase64);
+            return new String(innerSM4Decrypt(key, cipher), StandardCharsets.UTF_8);
         } catch (Exception e) {
-            return "";
+            return EMPTY_STRING;
         }
     }
 
