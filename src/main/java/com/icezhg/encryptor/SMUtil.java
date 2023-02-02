@@ -216,8 +216,8 @@ public class SMUtil {
     public static boolean sm2SignValidate(String hexPublicKey, byte[] value, String sortedString, String id) {
         try {
             BCECPublicKey publicKey = getECPublicKeyByPublicKeyHex(hexPublicKey);
-            return verifySignature(sortedString.getBytes(StandardCharsets.UTF_8), value,
-                    id.getBytes(StandardCharsets.UTF_8), publicKey);
+            byte[] src = sortedString.getBytes(StandardCharsets.UTF_8);
+            return verifySignature(src, value, id.getBytes(StandardCharsets.UTF_8), publicKey);
         } catch (Exception e) {
             return false;
         }
