@@ -213,11 +213,11 @@ public class SMUtil {
     /**
      * SM2验签入口
      */
-    public static boolean sm2SignValidate(String hexPublicKey, byte[] value, String sortedString, String id) {
+    public static boolean sm2SignValidate(String hexPublicKey, byte[] sign, String sortedString, String id) {
         try {
             BCECPublicKey publicKey = getECPublicKeyByPublicKeyHex(hexPublicKey);
             byte[] src = sortedString.getBytes(StandardCharsets.UTF_8);
-            return verifySignature(src, value, id.getBytes(StandardCharsets.UTF_8), publicKey);
+            return verifySignature(src, sign, id.getBytes(StandardCharsets.UTF_8), publicKey);
         } catch (Exception e) {
             return false;
         }
