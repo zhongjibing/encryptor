@@ -5,38 +5,27 @@ plugins {
 }
 
 group = 'com.icezhg'
-version = '1.0.0'
+version = '1.1.0'
 description = 'encryptor'
 
-sourceCompatibility = '17'
-targetCompatibility = '17'
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
 
-compileJava.options.encoding = 'utf-8'
-compileTestJava.options.encoding = 'utf-8'
-
-tasks.withType(JavaCompile) {
-    options.encoding = 'UTF-8'
-}
-
-tasks.withType(Javadoc) {
-    options.encoding = 'UTF-8'
+    withSourcesJar()
 }
 
 dependencies {
-    implementation 'org.bouncycastle:bcprov-jdk18on:1.72'
-    implementation 'org.bouncycastle:bcpkix-jdk18on:1.72'
-    implementation 'org.bouncycastle:bcprov-ext-jdk18on:1.72'
-    implementation 'commons-codec:commons-codec:1.15'
+    implementation 'org.bouncycastle:bcprov-jdk18on:1.80'
+    implementation 'commons-codec:commons-codec:1.18.0'
 }
 
-configurations.all() {
+configurations.configureEach() {
     Configuration configuration ->
         configuration.resolutionStrategy.failOnVersionConflict()
 }
 
-java {
-    withSourcesJar()
-}
 
 repositories {
     mavenLocal()
