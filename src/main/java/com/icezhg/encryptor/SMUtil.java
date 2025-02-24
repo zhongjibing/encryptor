@@ -8,6 +8,7 @@ import org.bouncycastle.asn1.DERSequence;
 import org.bouncycastle.asn1.gm.GMNamedCurves;
 import org.bouncycastle.asn1.x9.X9ECParameters;
 import org.bouncycastle.crypto.InvalidCipherTextException;
+import org.bouncycastle.crypto.digests.SM3Digest;
 import org.bouncycastle.crypto.engines.SM2Engine;
 import org.bouncycastle.crypto.params.ECDomainParameters;
 import org.bouncycastle.crypto.params.ECPrivateKeyParameters;
@@ -33,6 +34,7 @@ import java.security.SecureRandom;
 import java.security.Security;
 import java.security.Signature;
 import java.util.Arrays;
+import java.util.HexFormat;
 
 public class SMUtil {
 
@@ -228,6 +230,14 @@ public class SMUtil {
      */
     public static boolean sm2SignValidate(String hexPublicKey, String sign, String sortedString, String id) {
         return sm2SignValidate(hexPublicKey, Base64.decodeBase64(sign), sortedString, id);
+    }
+
+    public static String sm3Hash(String plainText) {
+        SM3Digest digest = new SM3Digest();
+        digest.update(plainText.getBytes(StandardCharsets.UTF_8), 0, plainText.length());
+        byte[] cipher = new byte[digest.getDigestSize()];
+        digest.doFinal(cipher, 0);
+        return Hex.toHexString(cipher);
     }
 
     private static Key generateSm4Key(byte[] key) {
