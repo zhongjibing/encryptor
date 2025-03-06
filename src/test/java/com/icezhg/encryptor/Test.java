@@ -1,4 +1,4 @@
 package com.icezhg.encryptor;
 
-public class SM4Test {
+public class Test {
 }
