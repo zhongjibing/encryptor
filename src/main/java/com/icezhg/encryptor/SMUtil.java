@@ -24,17 +24,13 @@ import org.bouncycastle.jce.spec.ECPublicKeySpec;
 import org.bouncycastle.util.encoders.Hex;
 
 import javax.crypto.Cipher;
+import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
-import java.security.GeneralSecurityException;
-import java.security.Key;
-import java.security.SecureRandom;
-import java.security.Security;
-import java.security.Signature;
+import java.security.*;
 import java.util.Arrays;
-import java.util.HexFormat;
 
 public class SMUtil {
 
@@ -47,10 +43,11 @@ public class SMUtil {
             x9ECParameters.getG(), x9ECParameters.getN(), x9ECParameters.getH());
 
     private static final String CIPHER_PARAM = "SM4";
-    private static final String MODE_PARAM = "SM4/ECB/PKCS7Padding";
+    private static final String MODE_PARAM = "SM4/CBC/PKCS5Padding";
     private static final String EMPTY_STRING = "";
     private static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
 
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     static {
         if (Security.getProperty(PROV_NAME) == null) {
@@ -244,19 +241,26 @@ public class SMUtil {
         return new SecretKeySpec(Arrays.copyOf(key, 16), CIPHER_PARAM);
     }
 
-    private static byte[] innerSM4Encrypt(byte[] src, byte[] key) throws GeneralSecurityException {
+    private static IvParameterSpec ivParameterSpec(byte[] iv) {
+        return iv == null ? null : new IvParameterSpec(Arrays.copyOf(iv, 16));
+    }
+
+    private static byte[] innerSM4Encrypt(byte[] src, byte[] key, byte[] iv) throws GeneralSecurityException {
         Cipher cipher = Cipher.getInstance(MODE_PARAM, PROV_NAME);
         Key sm4Key = generateSm4Key(key);
-        cipher.init(Cipher.ENCRYPT_MODE, sm4Key);
+        IvParameterSpec ivSpec = ivParameterSpec(iv);
+        cipher.init(Cipher.ENCRYPT_MODE, sm4Key, ivSpec);
         return cipher.doFinal(src);
     }
 
-    private static byte[] innerSM4Decrypt(byte[] key, byte[] src) throws GeneralSecurityException {
+    private static byte[] innerSM4Decrypt(byte[] key, byte[] iv, byte[] src) throws GeneralSecurityException {
         Cipher cipher = Cipher.getInstance(MODE_PARAM, PROV_NAME);
         Key sm4Key = generateSm4Key(key);
-        cipher.init(Cipher.DECRYPT_MODE, sm4Key);
+        IvParameterSpec ivSpec = ivParameterSpec(iv);
+        cipher.init(Cipher.DECRYPT_MODE, sm4Key, ivSpec);
         return cipher.doFinal(src);
     }
+
 
     /**
      * SM4加密入口
@@ -264,8 +268,20 @@ public class SMUtil {
     public static String sm4Encrypt(String sm4Key, String plainText) {
         try {
             byte[] key = sm4Key.getBytes(StandardCharsets.UTF_8);
+            byte[] iv = SECURE_RANDOM.generateSeed(16);
             byte[] plain = plainText.getBytes(StandardCharsets.UTF_8);
-            return Base64.encodeBase64String(innerSM4Encrypt(plain, key));
+            return Base64.encodeBase64String(Bytes.mergeBytes(iv, innerSM4Encrypt(plain, key, iv)));
+        } catch (Exception e) {
+            return EMPTY_STRING;
+        }
+    }
+
+    public static String sm4Encrypt(String sm4Key, String sm4Iv, String plainText) {
+        try {
+            byte[] key = sm4Key.getBytes(StandardCharsets.UTF_8);
+            byte[] iv = sm4Iv.getBytes(StandardCharsets.UTF_8);
+            byte[] plain = plainText.getBytes(StandardCharsets.UTF_8);
+            return Base64.encodeBase64String(innerSM4Encrypt(plain, key, iv));
         } catch (Exception e) {
             return EMPTY_STRING;
         }
@@ -277,8 +293,21 @@ public class SMUtil {
     public static String sm4Decrypt(String sm4Key, String encBase64) {
         try {
             byte[] key = sm4Key.getBytes(StandardCharsets.UTF_8);
+            byte[] original = Base64.decodeBase64(encBase64);
+            byte[] iv = Bytes.splitBytes(original, 0, 16);
+            byte[] cipher = Bytes.splitBytes(original, 16);
+            return new String(innerSM4Decrypt(key, iv, cipher), StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return EMPTY_STRING;
+        }
+    }
+
+    public static String sm4Decrypt(String sm4Key, String sm4Iv, String encBase64) {
+        try {
+            byte[] key = sm4Key.getBytes(StandardCharsets.UTF_8);
+            byte[] iv = sm4Iv != null ? sm4Iv.getBytes(StandardCharsets.UTF_8) : null;
             byte[] cipher = Base64.decodeBase64(encBase64);
-            return new String(innerSM4Decrypt(key, cipher), StandardCharsets.UTF_8);
+            return new String(innerSM4Decrypt(key, iv, cipher), StandardCharsets.UTF_8);
         } catch (Exception e) {
             return EMPTY_STRING;
         }
