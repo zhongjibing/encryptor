@@ -5,12 +5,12 @@ plugins {
 }
 
 group = 'com.icezhg'
-version = '1.1.0'
+version = '1.25.0'
 description = 'encryptor'
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
+        languageVersion = JavaLanguageVersion.of(25)
     }
 
     withSourcesJar()
@@ -21,9 +21,8 @@ dependencies {
     implementation 'commons-codec:commons-codec:1.18.0'
 }
 
-configurations.configureEach() {
-    Configuration configuration ->
-        configuration.resolutionStrategy.failOnVersionConflict()
+configurations.configureEach {
+    resolutionStrategy.failOnVersionConflict()
 }
 
 
@@ -31,16 +30,14 @@ repositories {
     mavenLocal()
     maven {
         name = 'release'
-        url 'https://packages.aliyun.com/maven/repository/2027113-release-yjsA6r/'
+        url = 'https://packages.aliyun.com/maven/repository/2027113-release-yjsA6r/'
         credentials(PasswordCredentials)
     }
     maven {
         name = 'snapshot'
-        url 'https://packages.aliyun.com/maven/repository/2027113-snapshot-4NJMQr/'
+        url = 'https://packages.aliyun.com/maven/repository/2027113-snapshot-4NJMQr/'
         credentials(PasswordCredentials)
     }
-    maven { url 'https://repo1.maven.org/maven2/' }
-    maven { url 'https://maven.aliyun.com/repository/public' }
     mavenCentral()
 }
 
